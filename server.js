@@ -23,10 +23,8 @@ app.use('/api/reports', reportsRoutes);
 app.use('/api/courses', coursesRoutes);
 app.use('/api/lectures', lecturesRoutes);
 app.use('/api/classes', classesRoutes);
-
-// ✅ Mount rating routes at /api so frontend URLs match exactly
-app.use('/api', ratingRoutes);
-
+app.use('/api', ratingRoutes); // ✅ changed from '/api/rating' to '/api'
+// keeps your frontend calls like /api/lectures-to-rate and /api/rating working
 app.use('/api/monitoring', monitoringRoutes);
 
 // Default route
@@ -39,6 +37,8 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+
 
 
 
