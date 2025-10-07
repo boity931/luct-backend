@@ -13,20 +13,8 @@ const monitoringRoutes = require('./routes/monitoring');
 
 const app = express();
 
-// ✅ FIXED: Secure and specific CORS configuration
-app.use(
-  cors({
-    origin: [
-      'https://luct-reporting-system-frontend-8l7e.vercel.app', // your Vercel frontend
-      'http://localhost:3000' // for local development
-    ],
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,
-  })
-);
-
 // Middleware
+app.use(cors());
 app.use(express.json());
 
 // Mount routes
@@ -35,18 +23,19 @@ app.use('/api/reports', reportsRoutes);
 app.use('/api/courses', coursesRoutes);
 app.use('/api/lectures', lecturesRoutes);
 app.use('/api/classes', classesRoutes);
-app.use('/api', ratingRoutes); // ✅ keep this as-is for compatibility
+app.use('/api', ratingRoutes); // ✅ changed from '/api/rating' to '/api'
+// keeps your frontend calls like /api/lectures-to-rate and /api/rating working
 app.use('/api/monitoring', monitoringRoutes);
 
 // Default route
 app.get('/', (req, res) => {
-  res.send('API is running ✅');
+  res.send('API is running');
 });
 
 // Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
 
 
