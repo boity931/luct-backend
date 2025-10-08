@@ -9,12 +9,12 @@ router.get('/students-to-rate', auth(), (req, res) => {
     return res.status(403).json({ msg: 'Access denied' });
 
   db.query(`SELECT id, username FROM users WHERE role = 'student'`, (err, results) => {
-    if (err) return res.status(500).json({ msg: 'DB error' });
+    if (err) return res.status(500).json({ msg: 'DB error fetching students' });
     res.json(results);
   });
 });
 
-// GET lectures (from reports) for students to rate
+// GET lectures for students to rate
 router.get('/lectures-to-rate', auth(), (req, res) => {
   if (req.user.role !== 'student')
     return res.status(403).json({ msg: 'Access denied' });
@@ -26,13 +26,17 @@ router.get('/lectures-to-rate', auth(), (req, res) => {
     ORDER BY r.date_of_lecture DESC
   `;
   db.query(sql, (err, results) => {
-    if (err) return res.status(500).json({ msg: 'DB error' });
+    if (err) return res.status(500).json({ msg: 'DB error fetching lectures' });
     res.json(results);
   });
 });
 
 // GET all ratings
 router.get('/rating', auth(), (req, res) => {
+  if (!['student', 'lecturer'].includes(req.user.role)) {
+    return res.status(403).json({ msg: 'You do not have access to view ratings.' });
+  }
+
   const sql = `
     SELECT r.id, r.student_id, r.lecturer_id, r.lecture_id, r.rating, r.comment,
            rep.course_name,
@@ -45,7 +49,7 @@ router.get('/rating', auth(), (req, res) => {
     ORDER BY r.created_at DESC
   `;
   db.query(sql, (err, results) => {
-    if (err) return res.status(500).json({ msg: 'DB error' });
+    if (err) return res.status(500).json({ msg: 'DB error fetching ratings' });
     res.json({ ratings: results });
   });
 });
@@ -57,21 +61,28 @@ router.post('/rating', auth(), (req, res) => {
     return res.status(400).json({ msg: 'Rating and target_id required' });
 
   if (req.user.role === 'lecturer') {
-    // Lecturer rates student
     const sql = `
       INSERT INTO ratings (student_id, lecturer_id, rating, comment)
       VALUES (?, ?, ?, ?)
     `;
     db.query(sql, [target_id, req.user.id, rating, comment || null], (err) => {
-      if (err) return res.status(500).json({ msg: 'DB error' });
+      if (err) {
+        console.error('DB insert rating error:', err);
+        return res.status(500).json({ msg: 'DB error inserting student rating' });
+      }
       res.json({ message: 'Student rated successfully!' });
     });
   } else if (req.user.role === 'student') {
-    // Student rates lecture (use report id)
     const sqlReport = `SELECT lecturer_id FROM reports WHERE id = ?`;
     db.query(sqlReport, [target_id], (err, results) => {
-      if (err) return res.status(500).json({ msg: 'DB error' });
-      if (!results.length) return res.status(404).json({ msg: 'Lecture not found' });
+      if (err) {
+        console.error('DB fetch lecture error:', err);
+        return res.status(500).json({ msg: 'DB error fetching lecture' });
+      }
+
+      if (!results.length || !results[0].lecturer_id) {
+        return res.status(400).json({ msg: 'Lecture not valid for rating' });
+      }
 
       const lecturer_id = results[0].lecturer_id;
       const sqlInsert = `
@@ -79,16 +90,20 @@ router.post('/rating', auth(), (req, res) => {
         VALUES (?, ?, ?, ?, ?)
       `;
       db.query(sqlInsert, [req.user.id, lecturer_id, target_id, rating, comment || null], (err) => {
-        if (err) return res.status(500).json({ msg: 'DB error' });
+        if (err) {
+          console.error('DB insert rating error:', err);
+          return res.status(500).json({ msg: 'Error inserting lecture rating' });
+        }
         res.json({ message: 'Lecture rated successfully!' });
       });
     });
   } else {
-    res.status(403).json({ msg: 'Access denied' });
+    res.status(403).json({ msg: 'You do not have access to submit ratings.' });
   }
 });
 
 module.exports = router;
+
 
 
 
