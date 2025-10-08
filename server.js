@@ -13,15 +13,21 @@ const monitoringRoutes = require('./routes/monitoring');
 
 const app = express();
 
-// ✅ FIXED: Secure and specific CORS configuration
+// ✅ Proper CORS configuration
+const allowedOrigins = [
+  'https://luct-reporting-system-frontend-8l7e.vercel.app', // your frontend on Vercel
+  'http://localhost:3000', // for local development
+];
+
 app.use(
   cors({
-    origin: [
-      'https://luct-reporting-system-frontend-8l7e.vercel.app', // your Vercel frontend
-      'http://localhost:3000' // for local development
-    ],
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
   })
 );
@@ -29,25 +35,26 @@ app.use(
 // Middleware
 app.use(express.json());
 
-// Mount routes
+// ✅ Mount routes
 app.use('/api/auth', authRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/courses', coursesRoutes);
 app.use('/api/lectures', lecturesRoutes);
 app.use('/api/classes', classesRoutes);
-app.use('/api', ratingRoutes); // ✅ keep this as-is for compatibility
+app.use('/api', ratingRoutes); // Keeps frontend calls like /api/lectures-to-rate and /api/rating working
 app.use('/api/monitoring', monitoringRoutes);
 
-// Default route
+// ✅ Default route
 app.get('/', (req, res) => {
-  res.send('API is running ✅');
+  res.send('✅ API is running successfully on Render.');
 });
 
-// Start server
+// ✅ Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
+
 
 
 
