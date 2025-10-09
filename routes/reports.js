@@ -12,7 +12,6 @@ router.get('/', auth(), (req, res) => {
   let sql;
 
   if (userRole === 'student') {
-    // Students should only see reports for rating (minimal data)
     sql = `
       SELECT r.id, r.lecturer_name, r.date_of_lecture, r.topic_taught
       FROM reports r
@@ -20,7 +19,6 @@ router.get('/', auth(), (req, res) => {
       ORDER BY r.date_of_lecture DESC
     `;
   } else if (userRole === 'pl') {
-    // PL gets PRL feedback reports, excluding rating-like data from feedback
     sql = `
       SELECT r.id, r.faculty_name, r.class_id, c.class_name, r.week_of_reporting, r.date_of_lecture,
              r.course_name, r.course_code, r.lecturer_name, r.actual_number_of_students_present,
@@ -35,7 +33,6 @@ router.get('/', auth(), (req, res) => {
       ORDER BY r.date_of_lecture DESC
     `;
   } else {
-    // Lecturers and PRL get full reports (excluding feedback for lecturers)
     sql = `
       SELECT r.*, c.class_name, c.venue
       FROM reports r
@@ -43,8 +40,10 @@ router.get('/', auth(), (req, res) => {
       ORDER BY r.date_of_lecture DESC
     `;
     if (userRole === 'lecturer') {
-      // Remove feedback from lecturer view if not needed
-      sql = sql.replace('r.*, c.class_name, c.venue', 'r.id, r.faculty_name, r.class_id, c.class_name, r.week_of_reporting, r.date_of_lecture, r.course_name, r.course_code, r.lecturer_name, r.actual_number_of_students_present, r.total_number_of_registered_students, r.venue, r.scheduled_lecture_time, r.topic_taught, r.learning_outcomes, r.recommendations, r.lecturer_id');
+      sql = sql.replace(
+        'r.*, c.class_name, c.venue',
+        'r.id, r.faculty_name, r.class_id, c.class_name, r.week_of_reporting, r.date_of_lecture, r.course_name, r.course_code, r.lecturer_name, r.actual_number_of_students_present, r.total_number_of_registered_students, r.venue, r.scheduled_lecture_time, r.topic_taught, r.learning_outcomes, r.recommendations, r.lecturer_id'
+      );
     }
   }
 
@@ -114,7 +113,10 @@ router.get('/:id', auth(), (req, res) => {
       WHERE r.id = ?
     `;
     if (userRole === 'lecturer') {
-      sql = sql.replace('r.*, c.class_name, c.venue', 'r.id, r.faculty_name, r.class_id, c.class_name, r.week_of_reporting, r.date_of_lecture, r.course_name, r.course_code, r.lecturer_name, r.actual_number_of_students_present, r.total_number_of_registered_students, r.venue, r.scheduled_lecture_time, r.topic_taught, r.learning_outcomes, r.recommendations, r.lecturer_id');
+      sql = sql.replace(
+        'r.*, c.class_name, c.venue',
+        'r.id, r.faculty_name, r.class_id, c.class_name, r.week_of_reporting, r.date_of_lecture, r.course_name, r.course_code, r.lecturer_name, r.actual_number_of_students_present, r.total_number_of_registered_students, r.venue, r.scheduled_lecture_time, r.topic_taught, r.learning_outcomes, r.recommendations, r.lecturer_id'
+      );
     }
   }
 
@@ -131,18 +133,16 @@ router.post('/', auth(), (req, res) => {
   if (req.user.role !== 'lecturer') {
     return res.status(403).json({ message: 'Access denied. Only lecturers can create reports.' });
   }
-  const fields = req.body;
-  const keys = Object.keys(fields);
-  const values = Object.values(fields);
 
-  if (!fields.class_id || !fields.date_of_lecture) {
-    return res.status(400).json({ message: 'class_id and date_of_lecture are required' });
+  const fields = req.body;
+
+  if (!fields.date_of_lecture) {
+    return res.status(400).json({ message: 'date_of_lecture is required' });
   }
 
-  db.query('SELECT class_id FROM classes WHERE class_id = ?', [fields.class_id], (err, classResult) => {
-    if (err) return res.status(500).json({ message: 'Database error', error: err.message });
-    if (classResult.length === 0) return res.status(400).json({ message: `Invalid class_id: ${fields.class_id}` });
-
+  const insertReport = () => {
+    const keys = Object.keys(fields);
+    const values = Object.values(fields);
     const placeholders = keys.map(() => '?').join(', ');
     const sql = `INSERT INTO reports (${keys.join(', ')}) VALUES (${placeholders})`;
 
@@ -150,7 +150,25 @@ router.post('/', auth(), (req, res) => {
       if (err) return res.status(500).json({ message: 'Database error', error: err.message });
       res.status(201).json({ message: 'Report created successfully', id: result.insertId });
     });
-  });
+  };
+
+  if (!fields.class_id && fields.class_name) {
+    db.query('SELECT class_id FROM classes WHERE class_name = ?', [fields.class_name], (err, result) => {
+      if (err) return res.status(500).json({ message: err.message });
+      if (result.length) {
+        fields.class_id = result[0].class_id;
+        insertReport();
+      } else {
+        db.query('INSERT INTO classes (class_name) VALUES (?)', [fields.class_name], (err2, result2) => {
+          if (err2) return res.status(500).json({ message: err2.message });
+          fields.class_id = result2.insertId;
+          insertReport();
+        });
+      }
+    });
+  } else {
+    insertReport();
+  }
 });
 
 // -------------------------
@@ -159,8 +177,10 @@ router.put('/:id', auth(), (req, res) => {
   if (req.user.role !== 'lecturer') {
     return res.status(403).json({ message: 'Access denied. Only lecturers can update reports.' });
   }
+
   const reportId = req.params.id;
   const fields = req.body;
+
   if (!reportId) return res.status(400).json({ message: 'Report ID is required' });
   const keys = Object.keys(fields);
   if (keys.length === 0) return res.status(400).json({ message: 'No fields provided to update' });
@@ -276,6 +296,7 @@ router.get('/export', auth(), (req, res) => {
 });
 
 module.exports = router;
+
 
 
 
